@@ -44,3 +44,24 @@ Los problemas que más aparecen al montar esta red en Packet Tracer, con la caus
 | Fase 1 en `MM_NO_STATE` | Clave precompartida distinta o política IKE distinta | Revisa `crypto isakmp key` y la `policy 10` en las dos puntas |
 | Fase 1 arriba pero sin paquetes cifrados | La ACL de la crypto map no coincide con el GRE | Las dos puntas deben tener la ACL en espejo (`permit gre host A host B` y `permit gre host B host A`) |
 | El túnel está `up/up` pero no pasa nada | Recursión de ruta: el destino del túnel se aprende por el propio túnel | Las IP públicas nunca deben entrar en OSPF; solo la ruta estática por defecto las alcanza |
+
+## Limitaciones de Packet Tracer 9.0
+
+Al montar la red en Packet Tracer 9.0 algunos comandos de `configs/` se aceptan pero no hacen nada, o directamente se rechazan. No son errores de las plantillas: en IOS real funcionan. Esto es lo que se vio y cómo afecta a las [pruebas](05-pruebas.md):
+
+| Qué pasa | Equipos | Efecto | Pruebas |
+|----------|---------|--------|---------|
+| Las interfaces `Tunnel` solo aceptan `ip address`, `tunnel source` y `tunnel destination`. Rechazan `description`, `ip mtu` e `ip ospf cost/hello-interval/dead-interval/message-digest-key` | Bordes y sucursales | Los dos túneles de cada sucursal quedan con el mismo costo: hay ECMP en lugar de principal y respaldo | RT-05 ⚠️ |
+| `default-information originate metric N` se rechaza; solo existe `default-information originate` | HQ-EDGE1, HQ-EDGE2 | Las dos rutas por defecto llegan con métrica 1 y la sede reparte entre los dos bordes | RT-04 ⚠️ |
+| Con la ruta por defecto en ECMP, el PAT y la NAT estática quedan asimétricos (la ida sale por un borde y la vuelta entra por el otro) | Sede | Desde la sede no carga `www.internet.test` y el servidor publicado no responde desde Internet. Desde la sucursal Sur (una sola salida) funciona | SV-02 ❌, SV-04 ❌, SEC-05 ❌ |
+| Después de un `shutdown`/`no shutdown` en la WAN, HQ-EDGE1 no vuelve a anunciar la ruta por defecto (ni con `clear ip ospf process`) hasta reiniciarlo | HQ-EDGE1 | Los túneles vuelven al camino principal, pero Internet sigue saliendo por HQ-EDGE2 | FO-08 ⚠️ |
+| `ip access-group` en una SVI del 3650 se acepta pero no se guarda | HQ-DSW1, HQ-DSW2 | No se aplican las ACL `INVITADOS` ni `SERVIDORES`: los invitados llegan a la red interna | SEC-04 ❌, SEC-06 ⚠️ |
+| Al arrancar, el router lee la `startup-config` antes de activar la licencia `securityk9` y descarta los comandos `crypto` | Bordes y sucursales | Tras abrir el `.pkt` o reiniciar, las VPN no levantan | Ver abajo |
+| No existen `security passwords min-length`, `logging trap` ni `switchport trunk encapsulation dot1q` (3650). El 2960 tampoco tiene `aaa new-model` ni `login block-for` | Switches | Los switches de acceso usan solo el usuario local | — |
+
+### Al abrir `topologia/NetCorp.pkt`
+
+1. Espera a que los equipos terminen de arrancar.
+2. En **HQ-EDGE1, HQ-EDGE2, BR1-RTR y BR2-RTR** ejecuta `copy startup-config running-config` para recuperar la configuración `crypto`.
+3. Si alguna fase 1 queda en `MM_NO_STATE` o `MM_KEY_EXCH`, ejecuta `clear crypto isakmp` y `clear crypto sa` en los cuatro routers y espera un minuto.
+4. Si los PCs tienen una IP de `10.10.50.0/24` o `169.254.x.x`, renueva el DHCP (IP Configuration → Static → DHCP).

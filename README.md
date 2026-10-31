@@ -2,7 +2,7 @@
 
 [![Validar red](https://github.com/0scar07/netcorp-cisco/actions/workflows/validar.yml/badge.svg)](https://github.com/0scar07/netcorp-cisco/actions/workflows/validar.yml)
 ![Cisco IOS](https://img.shields.io/badge/Cisco-IOS-1BA0D7?logo=cisco&logoColor=white)
-![Packet Tracer](https://img.shields.io/badge/Packet%20Tracer-8.2-049FD9)
+![Packet Tracer](https://img.shields.io/badge/Packet%20Tracer-9.0-049FD9)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![Licencia MIT](https://img.shields.io/badge/licencia-MIT-green)
 
@@ -78,6 +78,29 @@ flowchart TB
 | **Seguridad** | SSH v2 solo desde redes de gestión, AAA con TACACS+ y respaldo local, port-security, DHCP snooping, BPDU Guard, ACL para invitados y para la granja de servidores, puertos sin uso apagados |
 | **Red como código** | Inventario YAML, plantillas Jinja2, generador en Python, 145 pruebas con pytest y CI en GitHub Actions |
 
+## Validación en Packet Tracer
+
+La red está montada en [`topologia/NetCorp.pkt`](topologia/NetCorp.pkt) (Packet Tracer 9.0) con las configuraciones de `configs/` y se ejecutó el [plan de pruebas](docs/05-pruebas.md) completo. Cada prueba tiene su captura en [`evidencias/`](evidencias/).
+
+| Resultado | Pruebas |
+|-----------|---------|
+| ✅ Cumple (41) | Capa 2, HSRP y DHCP, OSPF, BGP, VPN, DNS, PAT, syslog, NTP, SSH/AAA, BPDU Guard, bloqueo por intentos y casi todos los fallos |
+| ⚠️ En parte (4) | RT-04, RT-05, SEC-06, FO-08 |
+| ❌ No cumple (4) | SV-02, SV-04, SEC-04, SEC-05 |
+
+Las ⚠️ y ❌ vienen de comandos que Packet Tracer acepta pero no aplica (costos OSPF en túneles, `metric` en `default-information originate`, ACL en SVI del 3650). El detalle está en [Limitaciones de Packet Tracer 9.0](docs/06-solucion-de-problemas.md#limitaciones-de-packet-tracer-90), junto con los pasos para dejar la red operativa después de abrir el `.pkt`.
+
+| | |
+|---|---|
+| **L2-03** · EtherChannel LACP `Po1(SU)` | **HA-01** · HSRP activo en HQ-DSW1 |
+| ![L2-03](evidencias/L2-03.png) | ![HA-01](evidencias/HA-01.png) |
+| **VPN-01** · IKE en `QM_IDLE` hacia las dos sucursales | **VPN-05** · De la sucursal a la sede por el túnel principal |
+| ![VPN-01](evidencias/VPN-01.png) | ![VPN-05](evidencias/VPN-05.png) |
+| **SEC-08** · BPDU Guard deja el puerto en `err-disabled` | **FO-03** · HQ-DSW2 asume todos los grupos HSRP |
+| ![SEC-08](evidencias/SEC-08.png) | ![FO-03](evidencias/FO-03.png) |
+| **SV-01** · DNS interno y servidor web | **SV-06** · Syslog centralizado |
+| ![SV-01](evidencias/SV-01.png) | ![SV-06](evidencias/SV-06.png) |
+
 ## Red como código
 
 ```mermaid
@@ -115,8 +138,8 @@ netcorp-cisco/
 │   ├── 05-pruebas.md           # plan de pruebas y de fallos
 │   ├── 06-solucion-de-problemas.md
 │   └── generado/               # cableado y direccionamiento (no editar a mano)
-├── topologia/                  # el archivo .pkt
-└── evidencias/                 # capturas de las pruebas
+├── topologia/NetCorp.pkt       # la red montada en Packet Tracer 9.0
+└── evidencias/                 # una captura por prueba (L2-01.png ... FO-08.png)
 ```
 
 ## Cómo usarlo
