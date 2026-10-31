@@ -14,6 +14,11 @@ Diseño, implementación y validación de la red de **NetCorp**, una empresa fic
 
 ## Topología
 
+![Topología de NetCorp](diagramas/topologia.png)
+
+<details>
+<summary>Versión en Mermaid (se puede editar como texto)</summary>
+
 ```mermaid
 flowchart TB
     subgraph NET["Internet simulada"]
@@ -55,6 +60,8 @@ flowchart TB
     EDGE2 -. "GRE/IPsec respaldo" .- R1
     EDGE2 -. "GRE/IPsec respaldo" .- R2
 ```
+
+</details>
 
 13 equipos de red, 6 servidores, 2 sitios remotos y 33 cables. El detalle puerto por puerto está en [docs/generado/cableado.md](docs/generado/cableado.md).
 
@@ -99,6 +106,7 @@ netcorp-cisco/
 ├── scripts/generar.py          # genera configs/ y docs/generado/
 ├── configs/                    # configuración final de cada equipo, lista para pegar
 ├── tests/                      # pruebas del diseño y de las configuraciones
+├── diagramas/                  # diagrama de topología (SVG en HTML y PNG)
 ├── docs/
 │   ├── 01-diseno.md            # requisitos, decisiones y alta disponibilidad
 │   ├── 02-direccionamiento.md  # cómo está pensado el plan de IPs

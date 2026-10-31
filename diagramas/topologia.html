@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Topología NetCorp</title>
+<style>
+  html, body { margin: 0; background: #ffffff; }
+  svg { display: block; font-family: "Segoe UI", Arial, sans-serif; }
+  .zona { fill: #f6f8fa; stroke: #d0d7de; stroke-width: 1.5; }
+  .zona-net { fill: #eef4ff; stroke: #b6cdf5; }
+  .titulo-zona { font-size: 15px; font-weight: 700; fill: #24292f; }
+  .sub-zona { font-size: 12px; fill: #57606a; }
+  .nombre { font-size: 13px; font-weight: 700; fill: #24292f; text-anchor: middle; }
+  .detalle { font-size: 11px; fill: #57606a; text-anchor: middle; }
+  .cable { stroke: #6e7781; stroke-width: 2; fill: none; }
+  .wan { stroke: #0969da; stroke-width: 2.5; }
+  .serial { stroke: #cf222e; stroke-width: 2.5; fill: none; }
+  .po { stroke: #8250df; stroke-width: 2.5; }
+  .vpn-p { stroke: #1a7f37; stroke-width: 2.5; stroke-dasharray: 9 6; fill: none; }
+  .vpn-r { stroke: #bc4c00; stroke-width: 2.5; stroke-dasharray: 4 6; fill: none; }
+  .etq { font-size: 11px; fill: #57606a; }
+  .etq-fondo { fill: #ffffff; }
+  .izq { text-anchor: start; }
+  .der { text-anchor: end; }
+</style>
+</head>
+<body>
+<svg width="1600" height="980" viewBox="0 0 1600 980" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Router: círculo con flechas cruzadas -->
+    <g id="router">
+      <ellipse cx="0" cy="6" rx="30" ry="9" fill="#0a3069"/>
+      <rect x="-30" y="-10" width="60" height="16" fill="#0550ae"/>
+      <ellipse cx="0" cy="-10" rx="30" ry="9" fill="#218bff"/>
+      <path d="M-14 -14 L14 -6 M14 -14 L-14 -6" stroke="#fff" stroke-width="2.4"/>
+    </g>
+    <!-- Switch de capa 2 -->
+    <g id="switch">
+      <rect x="-34" y="-14" width="68" height="28" rx="3" fill="#0550ae"/>
+      <path d="M-20 -5 H18 M12 -9 L18 -5 L12 -1 M20 5 H-18 M-12 1 L-18 5 L-12 9" stroke="#fff" stroke-width="2" fill="none"/>
+    </g>
+    <!-- Switch multicapa -->
+    <g id="multicapa">
+      <rect x="-36" y="-18" width="72" height="36" rx="4" fill="#0a3069"/>
+      <circle cx="0" cy="0" r="10" fill="#218bff"/>
+      <path d="M-28 -6 H-14 M28 -6 H14 M-28 6 H-14 M28 6 H14" stroke="#fff" stroke-width="2"/>
+    </g>
+    <!-- Servidor -->
+    <g id="servidor">
+      <rect x="-15" y="-24" width="30" height="48" rx="3" fill="#57606a"/>
+      <path d="M-9 -14 H9 M-9 -6 H9 M-9 2 H9" stroke="#d0d7de" stroke-width="2"/>
+      <circle cx="0" cy="14" r="3" fill="#2da44e"/>
+    </g>
+    <!-- PC -->
+    <g id="pc">
+      <rect x="-20" y="-18" width="40" height="27" rx="2" fill="#57606a"/>
+      <rect x="-16" y="-14" width="32" height="19" fill="#a5d6ff"/>
+      <rect x="-5" y="9" width="10" height="5" fill="#57606a"/>
+      <rect x="-13" y="14" width="26" height="4" rx="1" fill="#57606a"/>
+    </g>
+    <!-- Punto de acceso -->
+    <g id="ap">
+      <rect x="-22" y="-6" width="44" height="14" rx="7" fill="#57606a"/>
+      <path d="M-12 -12 Q0 -24 12 -12 M-7 -9 Q0 -16 7 -9" stroke="#57606a" stroke-width="2.4" fill="none"/>
+    </g>
+  </defs>
+
+  <!-- ===== Zonas ===== -->
+  <rect class="zona zona-net" x="230" y="20" width="1140" height="150" rx="14"/>
+  <text class="titulo-zona" x="250" y="46">Internet simulada</text>
+  <text class="sub-zona" x="250" y="64">ISP1 AS 65001 · ISP2 AS 65002 · peering eBGP por serial</text>
+
+  <rect class="zona" x="330" y="220" width="940" height="740" rx="14"/>
+  <text class="titulo-zona" x="350" y="928">Sede central (HQ)</text>
+  <text class="sub-zona" x="350" y="946">10.10.0.0/16 · AS 65100 · OSPF área 0</text>
+
+  <rect class="zona" x="20" y="300" width="270" height="460" rx="14"/>
+  <text class="titulo-zona" x="40" y="726">Sucursal Norte (BR1)</text>
+  <text class="sub-zona" x="40" y="744">10.20.0.0/16 · OSPF área 1</text>
+
+  <rect class="zona" x="1310" y="300" width="270" height="460" rx="14"/>
+  <text class="titulo-zona" x="1330" y="726">Sucursal Sur (BR2)</text>
+  <text class="sub-zona" x="1330" y="744">10.30.0.0/16 · OSPF área 2</text>
+
+  <!-- ===== Cables (debajo de los iconos) ===== -->
+  <!-- Internet -->
+  <line class="cable" x1="360" y1="105" x2="560" y2="105"/>
+  <path class="serial" d="M590 105 H760 L780 92 L800 118 L820 105 H1010"/>
+  <rect class="etq-fondo" x="738" y="122" width="124" height="16"/>
+  <text class="etq" x="800" y="134" text-anchor="middle">198.51.100.16/30</text>
+
+  <!-- WAN -->
+  <line class="cable wan" x1="560" y1="118" x2="640" y2="300"/>
+  <line class="cable wan" x1="1040" y1="118" x2="960" y2="300"/>
+  <path class="cable wan" d="M540 110 C 300 160, 160 300, 155 395"/>
+  <path class="cable wan" d="M1060 110 C 1300 160, 1440 300, 1445 395"/>
+  <rect class="etq-fondo" x="526" y="196" width="96" height="16"/>
+  <text class="etq" x="574" y="208" text-anchor="middle">198.51.100.0/30</text>
+  <rect class="etq-fondo" x="980" y="196" width="96" height="16"/>
+  <text class="etq" x="1028" y="208" text-anchor="middle">198.51.100.8/30</text>
+
+  <!-- Túneles GRE/IPsec -->
+  <path class="vpn-p" d="M182 396 C 300 260, 520 236, 618 296"/>
+  <path class="vpn-r" d="M186 404 C 380 236, 840 214, 944 296"/>
+  <path class="vpn-p" d="M1414 404 C 1220 236, 760 214, 656 296"/>
+  <path class="vpn-r" d="M1418 396 C 1300 260, 1080 236, 982 296"/>
+
+  <!-- Borde ↔ distribución -->
+  <line class="cable" x1="640" y1="320" x2="640" y2="470"/>
+  <line class="cable" x1="640" y1="320" x2="960" y2="470"/>
+  <line class="cable" x1="960" y1="320" x2="640" y2="470"/>
+  <line class="cable" x1="960" y1="320" x2="960" y2="470"/>
+  <rect class="etq-fondo" x="568" y="384" width="66" height="16"/>
+  <text class="etq" x="601" y="396" text-anchor="middle">OSPF MD5</text>
+
+  <!-- EtherChannel -->
+  <line class="po" x1="676" y1="484" x2="924" y2="484"/>
+  <line class="po" x1="676" y1="496" x2="924" y2="496"/>
+  <rect class="etq-fondo" x="742" y="500" width="116" height="16"/>
+  <text class="etq" x="800" y="512" text-anchor="middle">Po1 · LACP · troncal</text>
+
+  <!-- Distribución ↔ acceso -->
+  <line class="cable" x1="640" y1="508" x2="480" y2="650"/>
+  <line class="cable" x1="640" y1="508" x2="800" y2="650"/>
+  <line class="cable" x1="640" y1="508" x2="1120" y2="650"/>
+  <line class="cable" x1="960" y1="508" x2="480" y2="650"/>
+  <line class="cable" x1="960" y1="508" x2="800" y2="650"/>
+  <line class="cable" x1="960" y1="508" x2="1120" y2="650"/>
+
+  <!-- Acceso ↔ equipos -->
+  <line class="cable" x1="480" y1="664" x2="420" y2="790"/>
+  <line class="cable" x1="480" y1="664" x2="540" y2="790"/>
+  <line class="cable" x1="800" y1="664" x2="740" y2="790"/>
+  <line class="cable" x1="800" y1="664" x2="860" y2="790"/>
+  <line class="cable" x1="1120" y1="664" x2="1000" y2="800"/>
+  <line class="cable" x1="1120" y1="664" x2="1060" y2="800"/>
+  <line class="cable" x1="1120" y1="664" x2="1120" y2="800"/>
+  <line class="cable" x1="1120" y1="664" x2="1180" y2="800"/>
+  <line class="cable" x1="1120" y1="664" x2="1240" y2="800"/>
+  <path d="M884 812 Q 896 846 902 880" stroke="#57606a" stroke-width="1.6" stroke-dasharray="3 4" fill="none"/>
+
+  <!-- Sucursales -->
+  <line class="cable" x1="155" y1="415" x2="155" y2="530"/>
+  <line class="cable" x1="155" y1="544" x2="100" y2="640"/>
+  <line class="cable" x1="155" y1="544" x2="210" y2="640"/>
+  <line class="cable" x1="1445" y1="415" x2="1445" y2="530"/>
+  <line class="cable" x1="1445" y1="544" x2="1390" y2="640"/>
+  <line class="cable" x1="1445" y1="544" x2="1500" y2="640"/>
+
+  <!-- ===== Equipos ===== -->
+  <!-- Internet -->
+  <use href="#servidor" x="330" y="100"/>
+  <text class="nombre" x="330" y="146">INTERNET-WEB</text>
+  <text class="detalle" x="330" y="160">192.0.2.10</text>
+
+  <use href="#router" x="575" y="105"/>
+  <text class="nombre" x="575" y="80">ISP1</text>
+
+  <use href="#router" x="1025" y="105"/>
+  <text class="nombre" x="1025" y="80">ISP2</text>
+
+  <!-- Borde -->
+  <use href="#router" x="640" y="310"/>
+  <text class="nombre der" x="590" y="304">HQ-EDGE1</text>
+  <text class="detalle der" x="590" y="318">principal · NAT · eBGP</text>
+  <text class="detalle der" x="590" y="331">default métrica 10</text>
+
+  <use href="#router" x="960" y="310"/>
+  <text class="nombre izq" x="1010" y="304">HQ-EDGE2</text>
+  <text class="detalle izq" x="1010" y="318">respaldo · NAT · eBGP</text>
+  <text class="detalle izq" x="1010" y="331">default métrica 50</text>
+
+  <!-- Distribución -->
+  <use href="#multicapa" x="640" y="490"/>
+  <text class="nombre der" x="560" y="470">HQ-DSW1</text>
+  <text class="detalle der" x="560" y="484">HSRP activo 10·30·50·99</text>
+  <text class="detalle der" x="560" y="497">raíz STP de esas VLANs</text>
+
+  <use href="#multicapa" x="960" y="490"/>
+  <text class="nombre izq" x="1040" y="470">HQ-DSW2</text>
+  <text class="detalle izq" x="1040" y="484">HSRP activo 20·40</text>
+  <text class="detalle izq" x="1040" y="497">raíz STP de esas VLANs</text>
+
+  <!-- Acceso -->
+  <use href="#switch" x="480" y="650"/>
+  <text class="nombre" x="480" y="690">HQ-ASW1</text>
+  <use href="#switch" x="800" y="650"/>
+  <text class="nombre" x="800" y="690">HQ-ASW2</text>
+  <use href="#switch" x="1120" y="650"/>
+  <text class="nombre" x="1120" y="690">HQ-ASW3</text>
+
+  <!-- Equipos finales HQ -->
+  <use href="#pc" x="420" y="800"/>
+  <text class="nombre" x="420" y="840">PC-ADM-HQ</text>
+  <text class="detalle" x="420" y="854">VLAN 10</text>
+  <use href="#pc" x="540" y="800"/>
+  <text class="nombre" x="540" y="840">PC-VEN-HQ</text>
+  <text class="detalle" x="540" y="854">VLAN 20</text>
+  <use href="#pc" x="740" y="800"/>
+  <text class="nombre" x="740" y="840">PC-TI-HQ</text>
+  <text class="detalle" x="740" y="854">VLAN 30</text>
+  <use href="#ap" x="860" y="806"/>
+  <text class="nombre" x="860" y="840">AP-INVITADOS</text>
+  <text class="detalle" x="860" y="854">VLAN 40</text>
+  <use href="#pc" x="905" y="900"/>
+  <text class="nombre" x="905" y="938">LAPTOP-INV</text>
+  <text class="detalle" x="905" y="952">Wi-Fi WPA2</text>
+
+  <use href="#servidor" x="1000" y="810"/>
+  <use href="#servidor" x="1060" y="810"/>
+  <use href="#servidor" x="1120" y="810"/>
+  <use href="#servidor" x="1180" y="810"/>
+  <use href="#servidor" x="1240" y="810"/>
+  <text class="detalle" x="1000" y="852">WEB</text>
+  <text class="detalle" x="1060" y="852">DNS</text>
+  <text class="detalle" x="1120" y="852">AAA</text>
+  <text class="detalle" x="1180" y="852">LOG</text>
+  <text class="detalle" x="1240" y="852">DHCP</text>
+  <text class="nombre" x="1120" y="874">Granja de servidores · VLAN 50</text>
+  <text class="detalle" x="1120" y="888">10.10.50.10 – .14 · ACL SERVIDORES</text>
+
+  <!-- Sucursal Norte -->
+  <use href="#router" x="155" y="405"/>
+  <text class="nombre" x="155" y="448">BR1-RTR</text>
+  <text class="detalle" x="155" y="462">ABR · DHCP · PAT</text>
+  <use href="#switch" x="155" y="530"/>
+  <text class="nombre" x="155" y="570">BR1-SW</text>
+  <use href="#pc" x="100" y="650"/>
+  <text class="detalle" x="100" y="690">PC-ADM-BR1</text>
+  <use href="#pc" x="210" y="650"/>
+  <text class="detalle" x="210" y="690">PC-VEN-BR1</text>
+
+  <!-- Sucursal Sur -->
+  <use href="#router" x="1445" y="405"/>
+  <text class="nombre" x="1445" y="448">BR2-RTR</text>
+  <text class="detalle" x="1445" y="462">ABR · DHCP · PAT</text>
+  <use href="#switch" x="1445" y="530"/>
+  <text class="nombre" x="1445" y="570">BR2-SW</text>
+  <use href="#pc" x="1390" y="650"/>
+  <text class="detalle" x="1390" y="690">PC-ADM-BR2</text>
+  <use href="#pc" x="1500" y="650"/>
+  <text class="detalle" x="1500" y="690">PC-VEN-BR2</text>
+
+  <!-- ===== Leyenda ===== -->
+  <g transform="translate(30 772)">
+    <rect x="0" y="0" width="270" height="196" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+    <text class="titulo-zona" x="16" y="26">Leyenda</text>
+    <line class="cable" x1="16" y1="48" x2="60" y2="48"/><text class="etq" x="70" y="52">Cobre (LAN)</text>
+    <line class="cable wan" x1="16" y1="72" x2="60" y2="72"/><text class="etq" x="70" y="76">WAN / Internet</text>
+    <path class="serial" d="M16 96 H30 L36 88 L42 104 L48 96 H60"/><text class="etq" x="70" y="100">Serial entre ISP</text>
+    <line class="po" x1="16" y1="117" x2="60" y2="117"/><line class="po" x1="16" y1="125" x2="60" y2="125"/><text class="etq" x="70" y="125">EtherChannel LACP</text>
+    <line class="vpn-p" x1="16" y1="148" x2="60" y2="148"/><text class="etq" x="70" y="152">GRE/IPsec principal (costo 10)</text>
+    <line class="vpn-r" x1="16" y1="172" x2="60" y2="172"/><text class="etq" x="70" y="176">GRE/IPsec respaldo (costo 100)</text>
+  </g>
+</svg>
+</body>
+</html>
