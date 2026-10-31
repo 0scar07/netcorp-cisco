@@ -1,0 +1,348 @@
+# =====================================================================
+#  Inventario de NetCorp: la única fuente de verdad del proyecto.
+#
+#  scripts/generar.py lee este archivo y produce:
+#    - configs/<equipo>.txt          (configuración lista para pegar en la CLI)
+#    - docs/generado/cableado.md      (qué puerto va con qué puerto)
+#    - docs/generado/direccionamiento.md
+#
+#  Si cambias algo de la red, cámbialo aquí y vuelve a generar.
+# =====================================================================
+
+proyecto:
+  nombre: NetCorp
+  version: 1.0.0
+
+global:
+  dominio: netcorp.local
+  banner: "Acceso restringido a personal autorizado de NetCorp. Toda actividad queda registrada."
+
+  # Credenciales SOLO de laboratorio (Packet Tracer). Cámbialas antes de
+  # reutilizar estas plantillas en cualquier red real.
+  credenciales:
+    usuario: netadmin
+    clave_usuario: "N3tC0rp!Admin26"
+    enable_secret: "N3tC0rp!Enable26"
+    tacacs: "T4cacs!NetCorp"
+    snmp_ro: "N3tC0rpLecturaRO"
+    ospf_md5: "0spf!NetCorp"      # MD5 de OSPF admite máximo 16 caracteres
+    vpn_psk: "Vpn!NetCorp2026"
+
+  servidores:
+    web: 10.10.50.10
+    dns: 10.10.50.11
+    aaa: 10.10.50.12
+    syslog: 10.10.50.13
+    ntp: 10.10.50.13
+    tftp: 10.10.50.13
+    dhcp: 10.10.50.14
+
+  # Únicas redes que pueden abrir SSH contra los equipos.
+  redes_gestion:
+    - 10.10.30.0/24   # TI
+    - 10.10.99.0/24   # Gestión
+
+  # Redes propias (privadas + túneles). Se usan en las ACL de servidores.
+  redes_internas:
+    - 10.0.0.0/8
+    - 172.16.0.0/16
+
+  vlans_especiales:
+    nativa: 998
+    sin_uso: 999
+
+  ospf:
+    proceso: 1
+
+  vpn:
+    isakmp:
+      politica: 10
+      cifrado: aes 256
+      hash: sha
+      grupo: 5
+      vida: 86400
+    transform_set:
+      nombre: TS-AES256-SHA
+      esp: esp-aes 256 esp-sha-hmac
+    crypto_map: VPN-NETCORP
+
+# ---------------------------------------------------------------------
+#  Sitios y VLANs
+#  activo = qué switch de distribución es el HSRP activo y la raíz de STP.
+# ---------------------------------------------------------------------
+sitios:
+  HQ:
+    nombre: Sede central
+    resumen: 10.10.0.0/16
+    vlans:
+      - {id: 10, nombre: ADMINISTRACION, red: 10.10.10.0/24, dhcp: true,  activo: HQ-DSW1}
+      - {id: 20, nombre: VENTAS,         red: 10.10.20.0/24, dhcp: true,  activo: HQ-DSW2}
+      - {id: 30, nombre: TI,             red: 10.10.30.0/24, dhcp: true,  activo: HQ-DSW1}
+      - {id: 40, nombre: INVITADOS,      red: 10.10.40.0/24, dhcp: true,  activo: HQ-DSW2, acl_entrada: INVITADOS}
+      - {id: 50, nombre: SERVIDORES,     red: 10.10.50.0/24, dhcp: false, activo: HQ-DSW1, acl_salida: SERVIDORES}
+      - {id: 99, nombre: GESTION,        red: 10.10.99.0/24, dhcp: false, activo: HQ-DSW1, ospf: true}
+  BR1:
+    nombre: Sucursal Norte
+    resumen: 10.20.0.0/16
+    area: 1
+    vlans:
+      - {id: 10, nombre: ADMINISTRACION, red: 10.20.10.0/24, dhcp: true}
+      - {id: 20, nombre: VENTAS,         red: 10.20.20.0/24, dhcp: true}
+      - {id: 99, nombre: GESTION,        red: 10.20.99.0/24, dhcp: false}
+  BR2:
+    nombre: Sucursal Sur
+    resumen: 10.30.0.0/16
+    area: 2
+    vlans:
+      - {id: 10, nombre: ADMINISTRACION, red: 10.30.10.0/24, dhcp: true}
+      - {id: 20, nombre: VENTAS,         red: 10.30.20.0/24, dhcp: true}
+      - {id: 99, nombre: GESTION,        red: 10.30.99.0/24, dhcp: false}
+
+# ---------------------------------------------------------------------
+#  Equipos de red (los que reciben configuración generada)
+# ---------------------------------------------------------------------
+dispositivos:
+
+  # ---------------- Sede central: borde ----------------
+  HQ-EDGE1:
+    rol: borde
+    modelo: Cisco 2911 (licencia securityk9)
+    sitio: HQ
+    loopback: 10.255.255.1
+    interfaces:
+      - {nombre: GigabitEthernet0/0, ip: 10.255.1.1/30, ospf: true}
+      - {nombre: GigabitEthernet0/1, ip: 10.255.1.5/30, ospf: true}
+    wan: {nombre: GigabitEthernet0/2, ip: 198.51.100.2/30, gw: 198.51.100.1}
+    ospf_default_metrica: 10        # salida principal a Internet
+    nat_interior: [10.10.0.0/16]
+    nat_estatica:
+      - {interna: 10.10.50.10, publica: 203.0.113.10}
+    bgp:
+      as: 65100
+      vecinos: [{ip: 198.51.100.1, as: 65001}]
+      redes: [203.0.113.0/24]
+    tuneles:
+      - {num: 1, hacia: BR1-RTR, ip: 172.16.1.1/30, destino: 198.51.100.6,  costo: 10}
+      - {num: 2, hacia: BR2-RTR, ip: 172.16.1.5/30, destino: 198.51.100.14, costo: 10}
+
+  HQ-EDGE2:
+    rol: borde
+    modelo: Cisco 2911 (licencia securityk9)
+    sitio: HQ
+    loopback: 10.255.255.2
+    interfaces:
+      - {nombre: GigabitEthernet0/0, ip: 10.255.1.9/30,  ospf: true}
+      - {nombre: GigabitEthernet0/1, ip: 10.255.1.13/30, ospf: true}
+    wan: {nombre: GigabitEthernet0/2, ip: 198.51.100.10/30, gw: 198.51.100.9}
+    ospf_default_metrica: 50        # salida de respaldo
+    nat_interior: [10.10.0.0/16]
+    nat_estatica:
+      - {interna: 10.10.50.10, publica: 203.0.113.10}
+    bgp:
+      as: 65100
+      vecinos: [{ip: 198.51.100.9, as: 65002}]
+      redes: [203.0.113.0/24]
+    tuneles:
+      - {num: 1, hacia: BR1-RTR, ip: 172.16.2.1/30, destino: 198.51.100.6,  costo: 100}
+      - {num: 2, hacia: BR2-RTR, ip: 172.16.2.5/30, destino: 198.51.100.14, costo: 100}
+
+  # ---------------- Sede central: distribución (núcleo colapsado) ----------------
+  HQ-DSW1:
+    rol: distribucion
+    modelo: Cisco 3650-24PS (con fuente AC)
+    sitio: HQ
+    loopback: 10.255.255.3
+    host_svi: 2                     # IP .2 en cada SVI
+    interfaces:
+      - {nombre: GigabitEthernet1/0/1, ip: 10.255.1.2/30,  ospf: true}
+      - {nombre: GigabitEthernet1/0/2, ip: 10.255.1.10/30, ospf: true}
+    troncales: [GigabitEthernet1/0/3, GigabitEthernet1/0/4, GigabitEthernet1/0/5]
+    etherchannel: {id: 1, hacia: HQ-DSW2, miembros: "GigabitEthernet1/0/23 - 24"}
+    sin_uso: ["GigabitEthernet1/0/6 - 22", "GigabitEthernet1/1/1 - 4"]
+
+  HQ-DSW2:
+    rol: distribucion
+    modelo: Cisco 3650-24PS (con fuente AC)
+    sitio: HQ
+    loopback: 10.255.255.4
+    host_svi: 3
+    interfaces:
+      - {nombre: GigabitEthernet1/0/1, ip: 10.255.1.6/30,  ospf: true}
+      - {nombre: GigabitEthernet1/0/2, ip: 10.255.1.14/30, ospf: true}
+    troncales: [GigabitEthernet1/0/3, GigabitEthernet1/0/4, GigabitEthernet1/0/5]
+    etherchannel: {id: 1, hacia: HQ-DSW1, miembros: "GigabitEthernet1/0/23 - 24"}
+    sin_uso: ["GigabitEthernet1/0/6 - 22", "GigabitEthernet1/1/1 - 4"]
+
+  # ---------------- Sede central: acceso ----------------
+  HQ-ASW1:
+    rol: acceso
+    modelo: Cisco 2960-24TT
+    sitio: HQ
+    gestion: 10.10.99.11
+    acceso:
+      - {rango: "FastEthernet0/1 - 10",  vlan: 10, desc: "Usuarios ADMINISTRACION"}
+      - {rango: "FastEthernet0/11 - 20", vlan: 20, desc: "Usuarios VENTAS"}
+    troncales: [GigabitEthernet0/1, GigabitEthernet0/2]
+    sin_uso: ["FastEthernet0/21 - 24"]
+
+  HQ-ASW2:
+    rol: acceso
+    modelo: Cisco 2960-24TT
+    sitio: HQ
+    gestion: 10.10.99.12
+    acceso:
+      - {rango: "FastEthernet0/1 - 10", vlan: 30, desc: "Usuarios TI"}
+      - {rango: "FastEthernet0/11",     vlan: 40, desc: "Punto de acceso Wi-Fi de invitados", max_mac: 15}
+    troncales: [GigabitEthernet0/1, GigabitEthernet0/2]
+    sin_uso: ["FastEthernet0/12 - 24"]
+
+  HQ-ASW3:
+    rol: acceso
+    modelo: Cisco 2960-24TT
+    sitio: HQ
+    gestion: 10.10.99.13
+    acceso:
+      - {rango: "FastEthernet0/1 - 6", vlan: 50, desc: "Granja de servidores", max_mac: 1}
+    troncales: [GigabitEthernet0/1, GigabitEthernet0/2]
+    sin_uso: ["FastEthernet0/7 - 24"]
+
+  # ---------------- Sucursal Norte ----------------
+  BR1-RTR:
+    rol: sucursal
+    modelo: Cisco 2911 (licencia securityk9)
+    sitio: BR1
+    loopback: 10.255.255.11
+    lan: GigabitEthernet0/0
+    wan: {nombre: GigabitEthernet0/1, ip: 198.51.100.6/30, gw: 198.51.100.5}
+    nat_interior: [10.20.0.0/16]
+    tuneles:
+      - {num: 1, hacia: HQ-EDGE1, ip: 172.16.1.2/30, destino: 198.51.100.2,  costo: 10}
+      - {num: 2, hacia: HQ-EDGE2, ip: 172.16.2.2/30, destino: 198.51.100.10, costo: 100}
+
+  BR1-SW:
+    rol: acceso
+    modelo: Cisco 2960-24TT
+    sitio: BR1
+    gestion: 10.20.99.11
+    acceso:
+      - {rango: "FastEthernet0/1 - 10",  vlan: 10, desc: "Usuarios ADMINISTRACION"}
+      - {rango: "FastEthernet0/11 - 20", vlan: 20, desc: "Usuarios VENTAS"}
+    troncales: [GigabitEthernet0/1]
+    sin_uso: ["FastEthernet0/21 - 24", "GigabitEthernet0/2"]
+
+  # ---------------- Sucursal Sur ----------------
+  BR2-RTR:
+    rol: sucursal
+    modelo: Cisco 2911 (licencia securityk9)
+    sitio: BR2
+    loopback: 10.255.255.12
+    lan: GigabitEthernet0/0
+    wan: {nombre: GigabitEthernet0/1, ip: 198.51.100.14/30, gw: 198.51.100.13}
+    nat_interior: [10.30.0.0/16]
+    tuneles:
+      - {num: 1, hacia: HQ-EDGE1, ip: 172.16.1.6/30, destino: 198.51.100.2,  costo: 10}
+      - {num: 2, hacia: HQ-EDGE2, ip: 172.16.2.6/30, destino: 198.51.100.10, costo: 100}
+
+  BR2-SW:
+    rol: acceso
+    modelo: Cisco 2960-24TT
+    sitio: BR2
+    gestion: 10.30.99.11
+    acceso:
+      - {rango: "FastEthernet0/1 - 10",  vlan: 10, desc: "Usuarios ADMINISTRACION"}
+      - {rango: "FastEthernet0/11 - 20", vlan: 20, desc: "Usuarios VENTAS"}
+    troncales: [GigabitEthernet0/1]
+    sin_uso: ["FastEthernet0/21 - 24", "GigabitEthernet0/2"]
+
+  # ---------------- Internet simulada ----------------
+  ISP1:
+    rol: isp
+    modelo: Cisco 2911 + HWIC-2T
+    sitio: INTERNET
+    interfaces:
+      - {nombre: GigabitEthernet0/0, ip: 198.51.100.1/30}
+      - {nombre: GigabitEthernet0/1, ip: 198.51.100.5/30}
+      - {nombre: GigabitEthernet0/2, ip: 192.0.2.1/24}
+      - {nombre: Serial0/0/0,        ip: 198.51.100.17/30, reloj: 64000}
+    bgp:
+      as: 65001
+      vecinos: [{ip: 198.51.100.2, as: 65100}, {ip: 198.51.100.18, as: 65002}]
+      redes: [198.51.100.0/30, 198.51.100.4/30, 198.51.100.16/30, 192.0.2.0/24]
+
+  ISP2:
+    rol: isp
+    modelo: Cisco 2911 + HWIC-2T
+    sitio: INTERNET
+    interfaces:
+      - {nombre: GigabitEthernet0/0, ip: 198.51.100.9/30}
+      - {nombre: GigabitEthernet0/1, ip: 198.51.100.13/30}
+      - {nombre: Serial0/0/0,        ip: 198.51.100.18/30}
+    bgp:
+      as: 65002
+      vecinos: [{ip: 198.51.100.10, as: 65100}, {ip: 198.51.100.17, as: 65001}]
+      redes: [198.51.100.8/30, 198.51.100.12/30, 198.51.100.16/30]
+
+# ---------------------------------------------------------------------
+#  Equipos finales (se configuran a mano en Packet Tracer)
+# ---------------------------------------------------------------------
+hosts:
+  SRV-WEB:      {tipo: Servidor, ip: 10.10.50.10/24, gw: 10.10.50.1, dns: 10.10.50.11, servicios: "HTTP, HTTPS"}
+  SRV-DNS:      {tipo: Servidor, ip: 10.10.50.11/24, gw: 10.10.50.1, dns: 10.10.50.11, servicios: DNS}
+  SRV-AAA:      {tipo: Servidor, ip: 10.10.50.12/24, gw: 10.10.50.1, dns: 10.10.50.11, servicios: "AAA (TACACS+)"}
+  SRV-LOG:      {tipo: Servidor, ip: 10.10.50.13/24, gw: 10.10.50.1, dns: 10.10.50.11, servicios: "Syslog, NTP, TFTP"}
+  SRV-DHCP:     {tipo: Servidor, ip: 10.10.50.14/24, gw: 10.10.50.1, dns: 10.10.50.11, servicios: "DHCP (pools de la sede)"}
+  INTERNET-WEB: {tipo: Servidor, ip: 192.0.2.10/24,  gw: 192.0.2.1,  dns: 192.0.2.10,  servicios: "HTTP, DNS público"}
+  PC-ADM-HQ:    {tipo: PC, ip: DHCP, vlan: 10}
+  PC-VEN-HQ:    {tipo: PC, ip: DHCP, vlan: 20}
+  PC-TI-HQ:     {tipo: PC, ip: DHCP, vlan: 30}
+  AP-INVITADOS: {tipo: AccessPoint-PT, ip: "-", vlan: 40, servicios: "SSID NetCorp-Invitados, WPA2-PSK"}
+  LAPTOP-INV:   {tipo: Laptop (tarjeta Wi-Fi), ip: DHCP, vlan: 40}
+  PC-ADM-BR1:   {tipo: PC, ip: DHCP, vlan: 10}
+  PC-VEN-BR1:   {tipo: PC, ip: DHCP, vlan: 20}
+  PC-ADM-BR2:   {tipo: PC, ip: DHCP, vlan: 10}
+  PC-VEN-BR2:   {tipo: PC, ip: DHCP, vlan: 20}
+
+# ---------------------------------------------------------------------
+#  Cableado físico: [equipo:interfaz, equipo:interfaz, tipo de cable]
+#  De aquí salen las descripciones de interfaz y docs/generado/cableado.md
+# ---------------------------------------------------------------------
+enlaces:
+  # Borde ↔ distribución
+  - [HQ-EDGE1:GigabitEthernet0/0, HQ-DSW1:GigabitEthernet1/0/1, Cobre directo]
+  - [HQ-EDGE1:GigabitEthernet0/1, HQ-DSW2:GigabitEthernet1/0/1, Cobre directo]
+  - [HQ-EDGE2:GigabitEthernet0/0, HQ-DSW1:GigabitEthernet1/0/2, Cobre directo]
+  - [HQ-EDGE2:GigabitEthernet0/1, HQ-DSW2:GigabitEthernet1/0/2, Cobre directo]
+  # EtherChannel entre distribución
+  - [HQ-DSW1:GigabitEthernet1/0/23, HQ-DSW2:GigabitEthernet1/0/23, Cobre cruzado]
+  - [HQ-DSW1:GigabitEthernet1/0/24, HQ-DSW2:GigabitEthernet1/0/24, Cobre cruzado]
+  # Distribución ↔ acceso
+  - [HQ-DSW1:GigabitEthernet1/0/3, HQ-ASW1:GigabitEthernet0/1, Cobre directo]
+  - [HQ-DSW2:GigabitEthernet1/0/3, HQ-ASW1:GigabitEthernet0/2, Cobre directo]
+  - [HQ-DSW1:GigabitEthernet1/0/4, HQ-ASW2:GigabitEthernet0/1, Cobre directo]
+  - [HQ-DSW2:GigabitEthernet1/0/4, HQ-ASW2:GigabitEthernet0/2, Cobre directo]
+  - [HQ-DSW1:GigabitEthernet1/0/5, HQ-ASW3:GigabitEthernet0/1, Cobre directo]
+  - [HQ-DSW2:GigabitEthernet1/0/5, HQ-ASW3:GigabitEthernet0/2, Cobre directo]
+  # Equipos finales de la sede
+  - [HQ-ASW1:FastEthernet0/1,  PC-ADM-HQ:FastEthernet0,    Cobre directo]
+  - [HQ-ASW1:FastEthernet0/11, PC-VEN-HQ:FastEthernet0,    Cobre directo]
+  - [HQ-ASW2:FastEthernet0/1,  PC-TI-HQ:FastEthernet0,     Cobre directo]
+  - [HQ-ASW2:FastEthernet0/11, AP-INVITADOS:Port 0,        Cobre directo]
+  - [HQ-ASW3:FastEthernet0/1,  SRV-WEB:FastEthernet0,      Cobre directo]
+  - [HQ-ASW3:FastEthernet0/2,  SRV-DNS:FastEthernet0,      Cobre directo]
+  - [HQ-ASW3:FastEthernet0/3,  SRV-AAA:FastEthernet0,      Cobre directo]
+  - [HQ-ASW3:FastEthernet0/4,  SRV-LOG:FastEthernet0,      Cobre directo]
+  - [HQ-ASW3:FastEthernet0/5,  SRV-DHCP:FastEthernet0,     Cobre directo]
+  # WAN / Internet
+  - [HQ-EDGE1:GigabitEthernet0/2, ISP1:GigabitEthernet0/0, Cobre directo]
+  - [HQ-EDGE2:GigabitEthernet0/2, ISP2:GigabitEthernet0/0, Cobre directo]
+  - [BR1-RTR:GigabitEthernet0/1,  ISP1:GigabitEthernet0/1, Cobre directo]
+  - [BR2-RTR:GigabitEthernet0/1,  ISP2:GigabitEthernet0/1, Cobre directo]
+  - [ISP1:Serial0/0/0, ISP2:Serial0/0/0, Serial DCE (lado ISP1)]
+  - [ISP1:GigabitEthernet0/2, INTERNET-WEB:FastEthernet0, Cobre directo]
+  # Sucursales
+  - [BR1-RTR:GigabitEthernet0/0, BR1-SW:GigabitEthernet0/1, Cobre directo]
+  - [BR1-SW:FastEthernet0/1,  PC-ADM-BR1:FastEthernet0, Cobre directo]
+  - [BR1-SW:FastEthernet0/11, PC-VEN-BR1:FastEthernet0, Cobre directo]
+  - [BR2-RTR:GigabitEthernet0/0, BR2-SW:GigabitEthernet0/1, Cobre directo]
+  - [BR2-SW:FastEthernet0/1,  PC-ADM-BR2:FastEthernet0, Cobre directo]
+  - [BR2-SW:FastEthernet0/11, PC-VEN-BR2:FastEthernet0, Cobre directo]

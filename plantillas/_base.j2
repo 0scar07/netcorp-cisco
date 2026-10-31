@@ -1,0 +1,63 @@
+{#- Base común a todos los equipos: cabecera, endurecimiento y gestión.
+    Cada rol extiende esta plantilla y rellena el bloque "cuerpo". -#}
+!=====================================================================
+! {{ nombre }} - {{ d.modelo }}
+! Generado por scripts/generar.py desde inventario/red.yml. No editar a mano.
+! Pegar en modo EXEC privilegiado (despues de "enable").
+!=====================================================================
+configure terminal
+!
+hostname {{ nombre }}
+no ip domain-lookup
+ip domain-name {{ g.dominio }}
+service timestamps log datetime msec
+service timestamps debug datetime msec
+{% block seguridad %}
+service password-encryption
+security passwords min-length 10
+enable secret {{ c.enable_secret }}
+username {{ c.usuario }} privilege 15 secret {{ c.clave_usuario }}
+login block-for 120 attempts 3 within 60
+{% endblock %}
+banner motd #{{ g.banner }}#
+!
+{% block cuerpo %}{% endblock %}
+{% block gestion %}
+! ---------- Gestion: AAA, SSH, registros y hora ----------
+ip access-list standard GESTION-SSH
+{% for r in g.redes_gestion %}
+ permit {{ r | red }} {{ r | wildcard }}
+{% endfor %}
+ deny any
+!
+aaa new-model
+tacacs-server host {{ s.aaa }} key {{ c.tacacs }}
+aaa authentication login default group tacacs+ local
+!
+crypto key generate rsa general-keys modulus 2048
+ip ssh version 2
+ip ssh authentication-retries 3
+ip ssh time-out 60
+!
+line console 0
+ exec-timeout 10 0
+ logging synchronous
+line vty 0 4
+ access-class GESTION-SSH in
+ transport input ssh
+ exec-timeout 10 0
+ logging synchronous
+line vty 5 15
+ access-class GESTION-SSH in
+ transport input ssh
+ exec-timeout 10 0
+ logging synchronous
+!
+logging trap informational
+logging host {{ s.syslog }}
+ntp server {{ s.ntp }}
+snmp-server community {{ c.snmp_ro }} RO
+{% endblock %}
+!
+end
+write memory

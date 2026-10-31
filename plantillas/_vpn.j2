@@ -1,0 +1,39 @@
+{#- GRE sobre IPsec. Lo comparten el borde de la sede y los routers de sucursal.
+    El GRE lleva OSPF (multicast) y el IPsec cifra el GRE entre las IP públicas. -#}
+{% set vpn = g.vpn %}
+{% set local = d.wan.ip | ip %}
+! ---------- VPN: GRE sobre IPsec ----------
+crypto isakmp policy {{ vpn.isakmp.politica }}
+ encryption {{ vpn.isakmp.cifrado }}
+ hash {{ vpn.isakmp.hash }}
+ authentication pre-share
+ group {{ vpn.isakmp.grupo }}
+ lifetime {{ vpn.isakmp.vida }}
+{% for t in d.tuneles %}
+crypto isakmp key {{ c.vpn_psk }} address {{ t.destino }}
+{% endfor %}
+crypto ipsec transform-set {{ vpn.transform_set.nombre }} {{ vpn.transform_set.esp }}
+!
+{% for t in d.tuneles %}
+ip access-list extended VPN-{{ t.hacia }}
+ permit gre host {{ local }} host {{ t.destino }}
+crypto map {{ vpn.crypto_map }} {{ t.num * 10 }} ipsec-isakmp
+ set peer {{ t.destino }}
+ set transform-set {{ vpn.transform_set.nombre }}
+ match address VPN-{{ t.hacia }}
+!
+{% endfor %}
+{% for t in d.tuneles %}
+interface Tunnel{{ t.num }}
+ description GRE sobre IPsec a {{ t.hacia }}{{ " (principal)" if t.costo <= 10 else " (respaldo)" }}
+ ip address {{ t.ip | ip_mascara }}
+ ip mtu 1400
+ ip ospf cost {{ t.costo }}
+ ip ospf hello-interval 5
+ ip ospf dead-interval 20
+ ip ospf message-digest-key 1 md5 {{ c.ospf_md5 }}
+ tunnel source {{ d.wan.nombre }}
+ tunnel destination {{ t.destino }}
+ no shutdown
+!
+{% endfor %}

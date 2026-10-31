@@ -1,0 +1,25 @@
+name: Validar red
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Configs y documentación al día con el inventario
+        run: python scripts/generar.py --check
+
+      - name: Pruebas de diseño y de seguridad
+        run: python -m pytest -v

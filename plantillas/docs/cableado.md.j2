@@ -1,0 +1,24 @@
+# Cableado físico
+
+> Generado por `scripts/generar.py` desde `inventario/red.yml`. No editar a mano.
+
+Conecta cada fila en Packet Tracer con el cable indicado. Las descripciones de las interfaces en las configuraciones salen de esta misma tabla.
+
+| # | Equipo A | Puerto A | Equipo B | Puerto B | Cable |
+|---|----------|----------|----------|----------|-------|
+{% for a, b, cable in inv.enlaces %}
+{% set ea = a.split(":", 1) %}
+{% set eb = b.split(":", 1) %}
+| {{ loop.index }} | {{ ea[0] }} | {{ ea[1] }} | {{ eb[0] }} | {{ eb[1] }} | {{ cable }} |
+{% endfor %}
+
+## Modelos
+
+| Equipo | Rol | Modelo en Packet Tracer |
+|--------|-----|-------------------------|
+{% for nombre, d in inv.dispositivos.items() %}
+| {{ nombre }} | {{ d.rol }} | {{ d.modelo }} |
+{% endfor %}
+{% for nombre, h in inv.hosts.items() %}
+| {{ nombre }} | equipo final | {{ h.tipo }} |
+{% endfor %}

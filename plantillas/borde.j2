@@ -1,0 +1,64 @@
+{#- Router de borde de la sede: OSPF hacia dentro, eBGP + NAT hacia el ISP y hub de las VPN. -#}
+{% extends "_base.j2" %}
+{% import "_macros.j2" as m %}
+{% block cuerpo %}
+{% include "_vpn.j2" %}
+! ---------- Interfaces ----------
+interface Loopback0
+ description Router ID y origen de gestion
+ ip address {{ d.loopback }} 255.255.255.255
+!
+{% for i in d.interfaces %}
+interface {{ i.nombre }}
+ description Enlace L3 a {{ hacia(nombre, i.nombre) }}
+ ip address {{ i.ip | ip_mascara }}
+ ip nat inside
+{{ m.md5() }}
+ no shutdown
+!
+{% endfor %}
+interface {{ d.wan.nombre }}
+ description WAN a {{ hacia(nombre, d.wan.nombre) }}
+ ip address {{ d.wan.ip | ip_mascara }}
+ ip nat outside
+ crypto map {{ g.vpn.crypto_map }}
+ no shutdown
+!
+! ---------- Enrutamiento ----------
+ip route 0.0.0.0 0.0.0.0 {{ d.wan.gw }}
+{% for r in d.bgp.redes %}
+ip route {{ r | red }} {{ r | mascara }} Null0
+{% endfor %}
+!
+router ospf {{ g.ospf.proceso }}
+ router-id {{ d.loopback }}
+ passive-interface Loopback0
+ network {{ d.loopback }} 0.0.0.0 area 0
+{% for i in d.interfaces %}
+ network {{ i.ip | ip }} 0.0.0.0 area 0
+{% endfor %}
+{% for t in d.tuneles %}
+ network {{ t.ip | ip }} 0.0.0.0 area 0
+{% endfor %}
+ area 0 authentication message-digest
+ default-information originate metric {{ d.ospf_default_metrica }}
+!
+router bgp {{ d.bgp.as }}
+{% for v in d.bgp.vecinos %}
+ neighbor {{ v.ip }} remote-as {{ v.as }}
+{% endfor %}
+{% for r in d.bgp.redes %}
+ network {{ r | red }} mask {{ r | mascara }}
+{% endfor %}
+!
+! ---------- NAT ----------
+ip access-list standard NAT-INTERNO
+{% for r in d.nat_interior %}
+ permit {{ r | red }} {{ r | wildcard }}
+{% endfor %}
+ip nat inside source list NAT-INTERNO interface {{ d.wan.nombre }} overload
+{% for n in d.nat_estatica %}
+ip nat inside source static {{ n.interna }} {{ n.publica }}
+{% endfor %}
+!
+{% endblock %}

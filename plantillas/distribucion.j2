@@ -1,0 +1,125 @@
+{#- Switch multicapa de distribución (núcleo colapsado): SVIs con HSRP, STP alineado
+    con HSRP, EtherChannel LACP, OSPF y las ACL de invitados y servidores. -#}
+{% extends "_base.j2" %}
+{% import "_macros.j2" as m %}
+{% set enrutadas = sitio.vlans %}
+{% set activas = enrutadas | selectattr("activo", "equalto", nombre) | map(attribute="id") | map("string") | list %}
+{% set pasivas = enrutadas | rejectattr("activo", "equalto", nombre) | map(attribute="id") | map("string") | list %}
+{% set permitidas = enrutadas | map(attribute="id") | map("string") | join(",") %}
+{% block cuerpo %}
+ip routing
+vtp mode transparent
+spanning-tree mode rapid-pvst
+spanning-tree vlan {{ activas | join(",") }} root primary
+spanning-tree vlan {{ pasivas | join(",") }} root secondary
+!
+! ---------- VLANs ----------
+{{ m.vlans(sitio.vlans) }}
+!
+! ---------- Interfaces enrutadas ----------
+interface Loopback0
+ description Router ID y origen de gestion
+ ip address {{ d.loopback }} 255.255.255.255
+!
+{% for i in d.interfaces %}
+interface {{ i.nombre }}
+ description Enlace L3 a {{ hacia(nombre, i.nombre) }}
+ no switchport
+ ip address {{ i.ip | ip_mascara }}
+{{ m.md5() }}
+ no shutdown
+!
+{% endfor %}
+! ---------- EtherChannel LACP y troncales ----------
+interface range {{ d.etherchannel.miembros }}
+ description Miembro de Port-channel{{ d.etherchannel.id }} hacia {{ d.etherchannel.hacia }}
+{{ m.troncal(permitidas, encapsulacion=true) }}
+ channel-group {{ d.etherchannel.id }} mode active
+ no shutdown
+!
+interface Port-channel{{ d.etherchannel.id }}
+ description EtherChannel LACP a {{ d.etherchannel.hacia }}
+{{ m.troncal(permitidas, encapsulacion=true) }}
+!
+{% for t in d.troncales %}
+interface {{ t }}
+ description Troncal a {{ hacia(nombre, t) }}
+{{ m.troncal(permitidas, encapsulacion=true) }}
+ no shutdown
+!
+{% endfor %}
+{{ m.sin_uso(d.sin_uso) -}}
+!
+! ---------- SVIs con HSRP (VIP = .1) ----------
+{% for v in sitio.vlans %}
+interface Vlan{{ v.id }}
+ description {{ v.nombre }}{{ " (HSRP activo)" if v.activo == nombre else " (HSRP en espera)" }}
+ ip address {{ v.red | host(d.host_svi) }} {{ v.red | mascara }}
+{% if v.dhcp %}
+ ip helper-address {{ s.dhcp }}
+{% endif %}
+{% if v.acl_entrada is defined %}
+ ip access-group {{ v.acl_entrada }} in
+{% endif %}
+{% if v.acl_salida is defined %}
+ ip access-group {{ v.acl_salida }} out
+{% endif %}
+{% if v.ospf is defined and v.ospf %}
+{{ m.md5() }}
+{% endif %}
+ standby version 2
+ standby {{ v.id }} ip {{ v.red | host(1) }}
+ standby {{ v.id }} priority {{ 110 if v.activo == nombre else 100 }}
+ standby {{ v.id }} preempt
+ no shutdown
+!
+{% endfor %}
+! ---------- OSPF ----------
+router ospf {{ g.ospf.proceso }}
+ router-id {{ d.loopback }}
+ passive-interface default
+{% for i in d.interfaces %}
+ no passive-interface {{ i.nombre }}
+{% endfor %}
+{% for v in sitio.vlans if v.ospf is defined and v.ospf %}
+ no passive-interface Vlan{{ v.id }}
+{% endfor %}
+ network {{ d.loopback }} 0.0.0.0 area 0
+{% for i in d.interfaces %}
+ network {{ i.ip | ip }} 0.0.0.0 area 0
+{% endfor %}
+{% for v in sitio.vlans %}
+ network {{ v.red | host(d.host_svi) }} 0.0.0.0 area 0
+{% endfor %}
+ area 0 authentication message-digest
+!
+! ---------- ACL ----------
+ip access-list extended INVITADOS
+ remark Invitados: DHCP, DNS interno e Internet. Nada de la red interna.
+ permit udp any any eq 67
+ permit udp any host {{ s.dns }} eq 53
+{% for r in g.redes_internas %}
+ deny ip any {{ r | red }} {{ r | wildcard }}
+{% endfor %}
+ permit ip any any
+!
+ip access-list extended SERVIDORES
+ remark Lo unico que puede entrar a la VLAN de servidores
+ permit tcp any host {{ s.web }} eq 80
+ permit tcp any host {{ s.web }} eq 443
+{% for r in g.redes_internas %}
+ permit udp {{ r | red }} {{ r | wildcard }} host {{ s.dns }} eq 53
+ permit udp {{ r | red }} {{ r | wildcard }} host {{ s.dhcp }} eq 67
+ permit tcp {{ r | red }} {{ r | wildcard }} host {{ s.aaa }} eq 49
+ permit udp {{ r | red }} {{ r | wildcard }} host {{ s.syslog }} eq 514
+ permit udp {{ r | red }} {{ r | wildcard }} host {{ s.ntp }} eq 123
+ permit udp {{ r | red }} {{ r | wildcard }} host {{ s.tftp }} eq 69
+ permit icmp {{ r | red }} {{ r | wildcard }} any echo
+{% endfor %}
+ permit icmp any any echo-reply
+{% for r in g.redes_gestion %}
+ permit ip {{ r | red }} {{ r | wildcard }} any
+{% endfor %}
+ deny ip any any
+!
+{% endblock %}

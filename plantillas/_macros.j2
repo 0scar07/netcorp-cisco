@@ -1,0 +1,36 @@
+{#- Piezas reutilizables entre roles. -#}
+
+{% macro troncal(vlans, encapsulacion=false) %}
+{% if encapsulacion %}
+ switchport trunk encapsulation dot1q
+{% endif %}
+ switchport mode trunk
+ switchport trunk native vlan {{ ve.nativa }}
+ switchport trunk allowed vlan {{ vlans }}
+ switchport nonegotiate
+{%- endmacro %}
+
+{% macro sin_uso(rangos) %}
+{% for r in rangos %}
+interface range {{ r }}
+ description SIN USO
+ switchport mode access
+ switchport access vlan {{ ve.sin_uso }}
+ shutdown
+{% endfor %}
+{%- endmacro %}
+
+{% macro vlans(lista) %}
+{% for v in lista %}
+vlan {{ v.id }}
+ name {{ v.nombre }}
+{% endfor %}
+vlan {{ ve.nativa }}
+ name NATIVA
+vlan {{ ve.sin_uso }}
+ name SIN-USO
+{%- endmacro %}
+
+{% macro md5() %}
+ ip ospf message-digest-key 1 md5 {{ c.ospf_md5 }}
+{%- endmacro %}

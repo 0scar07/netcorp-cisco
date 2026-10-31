@@ -1,0 +1,81 @@
+# Plan de direccionamiento
+
+> Generado por `scripts/generar.py` desde `inventario/red.yml`. No editar a mano.
+
+## Bloques por sitio
+
+| Sitio | Nombre | Bloque resumido |
+|-------|--------|-----------------|
+{% for clave, sitio in inv.sitios.items() %}
+| {{ clave }} | {{ sitio.nombre }} | `{{ sitio.resumen }}` |
+{% endfor %}
+| WAN | Enlaces públicos (TEST-NET-2) | `198.51.100.0/24` |
+| PUB | Bloque público de NetCorp (TEST-NET-3) | `203.0.113.0/24` |
+| VPN | Túneles GRE | `172.16.0.0/16` |
+| INFRA | Enlaces internos y loopbacks | `10.255.0.0/16` |
+
+{% for clave, sitio in inv.sitios.items() %}
+## VLANs · {{ sitio.nombre }} ({{ clave }})
+
+{% if clave == "HQ" %}
+| VLAN | Nombre | Red | Gateway (VIP HSRP) | HQ-DSW1 | HQ-DSW2 | HSRP activo | DHCP |
+|------|--------|-----|--------------------|---------|---------|-------------|------|
+{% for v in sitio.vlans %}
+| {{ v.id }} | {{ v.nombre }} | `{{ v.red }}` | {{ v.red | host(1) }} | {{ v.red | host(2) }} | {{ v.red | host(3) }} | {{ v.activo }} | {{ "SRV-DHCP (relay)" if v.dhcp else "Estático" }} |
+{% endfor %}
+{% else %}
+| VLAN | Nombre | Red | Gateway | DHCP |
+|------|--------|-----|---------|------|
+{% for v in sitio.vlans %}
+| {{ v.id }} | {{ v.nombre }} | `{{ v.red }}` | {{ v.red | host(1) }} | {{ "Router local (.21 en adelante)" if v.dhcp else "Estático" }} |
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+| VLAN | Nombre | Uso |
+|------|--------|-----|
+| {{ ve.nativa }} | NATIVA | VLAN nativa de todas las troncales (no lleva tráfico de usuarios) |
+| {{ ve.sin_uso }} | SIN-USO | Puertos sin uso, apagados |
+
+## Interfaces con IP
+
+| Equipo | Interfaz | IP | Conectada a |
+|--------|----------|----|-------------|
+{% for nombre, d in inv.dispositivos.items() %}
+{% if d.loopback is defined %}
+| {{ nombre }} | Loopback0 | `{{ d.loopback }}/32` | Router ID |
+{% endif %}
+{% for i in d.interfaces | default([]) %}
+| {{ nombre }} | {{ i.nombre }} | `{{ i.ip }}` | {{ hacia(nombre, i.nombre) }} |
+{% endfor %}
+{% if d.wan is defined %}
+| {{ nombre }} | {{ d.wan.nombre }} | `{{ d.wan.ip }}` | {{ hacia(nombre, d.wan.nombre) }} |
+{% endif %}
+{% for t in d.tuneles | default([]) %}
+| {{ nombre }} | Tunnel{{ t.num }} | `{{ t.ip }}` | {{ t.hacia }} (costo OSPF {{ t.costo }}) |
+{% endfor %}
+{% if d.gestion is defined %}
+| {{ nombre }} | Vlan99 | `{{ d.gestion }}` | Gestión |
+{% endif %}
+{% endfor %}
+
+## Equipos finales
+
+| Equipo | Tipo | IP | Gateway | DNS | Servicios |
+|--------|------|----|---------|-----|-----------|
+{% for nombre, h in inv.hosts.items() %}
+| {{ nombre }} | {{ h.tipo }} | {{ h.ip }}{{ " (VLAN " ~ h.vlan ~ ")" if h.vlan is defined else "" }} | {{ h.gw | default("DHCP") }} | {{ h.dns | default("DHCP") }} | {{ h.servicios | default("-") }} |
+{% endfor %}
+
+## NAT
+
+| Router | Interna | Pública | Tipo |
+|--------|---------|---------|------|
+{% for nombre, d in inv.dispositivos.items() if d.nat_interior is defined %}
+{% for r in d.nat_interior %}
+| {{ nombre }} | `{{ r }}` | {{ d.wan.ip | ip }} | PAT (overload) |
+{% endfor %}
+{% for n in d.nat_estatica | default([]) %}
+| {{ nombre }} | {{ n.interna }} | {{ n.publica }} | Estática (SRV-WEB publicado) |
+{% endfor %}
+{% endfor %}

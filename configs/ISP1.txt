@@ -1,0 +1,47 @@
+!=====================================================================
+! ISP1 - Cisco 2911 + HWIC-2T
+! Generado por scripts/generar.py desde inventario/red.yml. No editar a mano.
+! Pegar en modo EXEC privilegiado (despues de "enable").
+!=====================================================================
+configure terminal
+!
+hostname ISP1
+no ip domain-lookup
+ip domain-name netcorp.local
+service timestamps log datetime msec
+service timestamps debug datetime msec
+enable secret N3tC0rp!Enable26
+banner motd #Acceso restringido a personal autorizado de NetCorp. Toda actividad queda registrada.#
+!
+interface GigabitEthernet0/0
+ description Hacia HQ-EDGE1 Gi0/2
+ ip address 198.51.100.1 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description Hacia BR1-RTR Gi0/1
+ ip address 198.51.100.5 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/2
+ description Hacia INTERNET-WEB Fa0
+ ip address 192.0.2.1 255.255.255.0
+ no shutdown
+!
+interface Serial0/0/0
+ description Hacia ISP2 Se0/0/0
+ ip address 198.51.100.17 255.255.255.252
+ clock rate 64000
+ no shutdown
+!
+router bgp 65001
+ neighbor 198.51.100.2 remote-as 65100
+ neighbor 198.51.100.18 remote-as 65002
+ network 198.51.100.0 mask 255.255.255.252
+ network 198.51.100.4 mask 255.255.255.252
+ network 198.51.100.16 mask 255.255.255.252
+ network 192.0.2.0 mask 255.255.255.0
+!
+!
+end
+write memory

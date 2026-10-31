@@ -1,0 +1,67 @@
+{#- Router de sucursal: router-on-a-stick, DHCP local, salida local a Internet con PAT
+    y dos túneles GRE/IPsec hacia la sede (principal y respaldo). Es ABR de su área OSPF. -#}
+{% extends "_base.j2" %}
+{% set area = sitio.area %}
+{% block cuerpo %}
+{% include "_vpn.j2" %}
+! ---------- Interfaces ----------
+interface Loopback0
+ description Router ID y origen de gestion
+ ip address {{ d.loopback }} 255.255.255.255
+!
+interface {{ d.lan }}
+ description Troncal a {{ hacia(nombre, d.lan) }}
+ no ip address
+ no shutdown
+!
+{% for v in sitio.vlans %}
+interface {{ d.lan }}.{{ v.id }}
+ description {{ v.nombre }}
+ encapsulation dot1Q {{ v.id }}
+ ip address {{ v.red | host(1) }} {{ v.red | mascara }}
+ ip nat inside
+!
+{% endfor %}
+interface {{ d.wan.nombre }}
+ description WAN a {{ hacia(nombre, d.wan.nombre) }}
+ ip address {{ d.wan.ip | ip_mascara }}
+ ip nat outside
+ crypto map {{ g.vpn.crypto_map }}
+ no shutdown
+!
+! ---------- DHCP local ----------
+{% for v in sitio.vlans if v.dhcp %}
+ip dhcp excluded-address {{ v.red | host(1) }} {{ v.red | host(20) }}
+ip dhcp pool {{ d.sitio }}-{{ v.nombre }}
+ network {{ v.red | red }} {{ v.red | mascara }}
+ default-router {{ v.red | host(1) }}
+ dns-server {{ s.dns }}
+!
+{% endfor %}
+! ---------- Enrutamiento ----------
+ip route 0.0.0.0 0.0.0.0 {{ d.wan.gw }}
+!
+router ospf {{ g.ospf.proceso }}
+ router-id {{ d.loopback }}
+ passive-interface Loopback0
+{% for v in sitio.vlans %}
+ passive-interface {{ d.lan }}.{{ v.id }}
+{% endfor %}
+ network {{ d.loopback }} 0.0.0.0 area 0
+{% for t in d.tuneles %}
+ network {{ t.ip | ip }} 0.0.0.0 area 0
+{% endfor %}
+{% for v in sitio.vlans %}
+ network {{ v.red | host(1) }} 0.0.0.0 area {{ area }}
+{% endfor %}
+ area 0 authentication message-digest
+ area {{ area }} range {{ sitio.resumen | red }} {{ sitio.resumen | mascara }}
+!
+! ---------- NAT (salida local a Internet) ----------
+ip access-list standard NAT-INTERNO
+{% for r in d.nat_interior %}
+ permit {{ r | red }} {{ r | wildcard }}
+{% endfor %}
+ip nat inside source list NAT-INTERNO interface {{ d.wan.nombre }} overload
+!
+{% endblock %}

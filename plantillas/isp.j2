@@ -1,0 +1,27 @@
+{#- Router de proveedor (Internet simulada): solo direccionamiento y eBGP.
+    No lleva el endurecimiento de NetCorp porque "no es nuestro". -#}
+{% extends "_base.j2" %}
+{% block seguridad %}
+enable secret {{ c.enable_secret }}
+{% endblock %}
+{% block cuerpo %}
+{% for i in d.interfaces %}
+interface {{ i.nombre }}
+ description Hacia {{ hacia(nombre, i.nombre) }}
+ ip address {{ i.ip | ip_mascara }}
+{% if i.reloj is defined %}
+ clock rate {{ i.reloj }}
+{% endif %}
+ no shutdown
+!
+{% endfor %}
+router bgp {{ d.bgp.as }}
+{% for v in d.bgp.vecinos %}
+ neighbor {{ v.ip }} remote-as {{ v.as }}
+{% endfor %}
+{% for r in d.bgp.redes %}
+ network {{ r | red }} mask {{ r | mascara }}
+{% endfor %}
+!
+{% endblock %}
+{% block gestion %}{% endblock %}

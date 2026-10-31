@@ -1,0 +1,56 @@
+{#- Switch de acceso (sede y sucursales): VLANs, port-security, DHCP snooping,
+    PortFast + BPDU Guard y puertos sin uso apagados. -#}
+{% extends "_base.j2" %}
+{% import "_macros.j2" as m %}
+{% set gestion = sitio.vlans | selectattr("nombre", "equalto", "GESTION") | first %}
+{% set con_dhcp = sitio.vlans | selectattr("dhcp") | map(attribute="id") | map("string") | join(",") %}
+{% set permitidas = sitio.vlans | map(attribute="id") | map("string") | join(",") %}
+{% block cuerpo %}
+vtp mode transparent
+spanning-tree mode rapid-pvst
+!
+! ---------- VLANs ----------
+{{ m.vlans(sitio.vlans) }}
+!
+! ---------- DHCP snooping ----------
+ip dhcp snooping
+ip dhcp snooping vlan {{ con_dhcp }}
+no ip dhcp snooping information option
+!
+! ---------- Puertos de acceso ----------
+{% for p in d.acceso %}
+interface range {{ p.rango }}
+ description {{ p.desc }}
+ switchport mode access
+ switchport access vlan {{ p.vlan }}
+ switchport port-security
+ switchport port-security maximum {{ p.max_mac | default(2) }}
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ ip dhcp snooping limit rate 15
+ no shutdown
+!
+{% endfor %}
+! ---------- Troncales ----------
+{% for t in d.troncales %}
+interface {{ t }}
+ description Troncal a {{ hacia(nombre, t) }}
+{{ m.troncal(permitidas) }}
+ ip dhcp snooping trust
+ no shutdown
+!
+{% endfor %}
+{{ m.sin_uso(d.sin_uso) -}}
+!
+! ---------- Gestion ----------
+interface Vlan1
+ shutdown
+interface Vlan{{ gestion.id }}
+ description Gestion
+ ip address {{ d.gestion }} {{ gestion.red | mascara }}
+ no shutdown
+ip default-gateway {{ gestion.red | host(1) }}
+!
+{% endblock %}

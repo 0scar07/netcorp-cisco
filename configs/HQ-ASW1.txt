@@ -1,0 +1,142 @@
+!=====================================================================
+! HQ-ASW1 - Cisco 2960-24TT
+! Generado por scripts/generar.py desde inventario/red.yml. No editar a mano.
+! Pegar en modo EXEC privilegiado (despues de "enable").
+!=====================================================================
+configure terminal
+!
+hostname HQ-ASW1
+no ip domain-lookup
+ip domain-name netcorp.local
+service timestamps log datetime msec
+service timestamps debug datetime msec
+service password-encryption
+security passwords min-length 10
+enable secret N3tC0rp!Enable26
+username netadmin privilege 15 secret N3tC0rp!Admin26
+login block-for 120 attempts 3 within 60
+banner motd #Acceso restringido a personal autorizado de NetCorp. Toda actividad queda registrada.#
+!
+vtp mode transparent
+spanning-tree mode rapid-pvst
+!
+! ---------- VLANs ----------
+vlan 10
+ name ADMINISTRACION
+vlan 20
+ name VENTAS
+vlan 30
+ name TI
+vlan 40
+ name INVITADOS
+vlan 50
+ name SERVIDORES
+vlan 99
+ name GESTION
+vlan 998
+ name NATIVA
+vlan 999
+ name SIN-USO
+!
+! ---------- DHCP snooping ----------
+ip dhcp snooping
+ip dhcp snooping vlan 10,20,30,40
+no ip dhcp snooping information option
+!
+! ---------- Puertos de acceso ----------
+interface range FastEthernet0/1 - 10
+ description Usuarios ADMINISTRACION
+ switchport mode access
+ switchport access vlan 10
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ ip dhcp snooping limit rate 15
+ no shutdown
+!
+interface range FastEthernet0/11 - 20
+ description Usuarios VENTAS
+ switchport mode access
+ switchport access vlan 20
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ ip dhcp snooping limit rate 15
+ no shutdown
+!
+! ---------- Troncales ----------
+interface GigabitEthernet0/1
+ description Troncal a HQ-DSW1 Gi1/0/3
+ switchport mode trunk
+ switchport trunk native vlan 998
+ switchport trunk allowed vlan 10,20,30,40,50,99
+ switchport nonegotiate
+ ip dhcp snooping trust
+ no shutdown
+!
+interface GigabitEthernet0/2
+ description Troncal a HQ-DSW2 Gi1/0/3
+ switchport mode trunk
+ switchport trunk native vlan 998
+ switchport trunk allowed vlan 10,20,30,40,50,99
+ switchport nonegotiate
+ ip dhcp snooping trust
+ no shutdown
+!
+interface range FastEthernet0/21 - 24
+ description SIN USO
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+!
+! ---------- Gestion ----------
+interface Vlan1
+ shutdown
+interface Vlan99
+ description Gestion
+ ip address 10.10.99.11 255.255.255.0
+ no shutdown
+ip default-gateway 10.10.99.1
+!
+! ---------- Gestion: AAA, SSH, registros y hora ----------
+ip access-list standard GESTION-SSH
+ permit 10.10.30.0 0.0.0.255
+ permit 10.10.99.0 0.0.0.255
+ deny any
+!
+aaa new-model
+tacacs-server host 10.10.50.12 key T4cacs!NetCorp
+aaa authentication login default group tacacs+ local
+!
+crypto key generate rsa general-keys modulus 2048
+ip ssh version 2
+ip ssh authentication-retries 3
+ip ssh time-out 60
+!
+line console 0
+ exec-timeout 10 0
+ logging synchronous
+line vty 0 4
+ access-class GESTION-SSH in
+ transport input ssh
+ exec-timeout 10 0
+ logging synchronous
+line vty 5 15
+ access-class GESTION-SSH in
+ transport input ssh
+ exec-timeout 10 0
+ logging synchronous
+!
+logging trap informational
+logging host 10.10.50.13
+ntp server 10.10.50.13
+snmp-server community N3tC0rpLecturaRO RO
+!
+end
+write memory
